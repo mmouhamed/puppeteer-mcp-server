@@ -4,6 +4,7 @@
       "maxDuration": 30
     }
   },
+  "outputDirectory": ".",
   "env": {
     "NODE_ENV": "production"
   }

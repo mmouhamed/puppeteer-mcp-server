@@ -1,22 +1,16 @@
 {
   "version": 2,
-  "builds": [
-    {
-      "src": "dist/http-server.js",
-      "use": "@vercel/node"
+  "functions": {
+    "dist/http-server.js": {
+      "maxDuration": 30
     }
-  ],
+  },
   "routes": [
     {
       "src": "/(.*)",
       "dest": "dist/http-server.js"
     }
   ],
-  "functions": {
-    "dist/http-server.js": {
-      "maxDuration": 30
-    }
-  },
   "env": {
     "NODE_ENV": "production"
   }

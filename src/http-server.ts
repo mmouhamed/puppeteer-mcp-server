@@ -256,12 +256,47 @@ class PuppeteerHTTPMCPServer {
       await this.browser.close();
     }
 
-    const options: any = {
-      args: [...chromium.args, '--hide-scrollbars', '--disable-web-security'],
-      defaultViewport: chromium.defaultViewport,
-      executablePath: await chromium.executablePath,
-      headless: args.headless ?? true,
-    };
+    let options: any;
+    
+    // Use different configurations for development vs production
+    if (process.env.NODE_ENV === 'production') {
+      // Production: Use chrome-aws-lambda for Vercel
+      options = {
+        args: [...chromium.args, '--hide-scrollbars', '--disable-web-security'],
+        defaultViewport: chromium.defaultViewport,
+        executablePath: await chromium.executablePath,
+        headless: args.headless ?? true,
+      };
+    } else {
+      // Development: Try to find local Chrome or use bundled Chromium
+      const fs = await import('fs');
+      
+      // Common Chrome paths on different systems
+      const chromePaths = [
+        '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome', // macOS
+        '/usr/bin/google-chrome', // Linux
+        '/usr/bin/chromium-browser', // Linux
+        'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe', // Windows
+        'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe', // Windows 32-bit
+      ];
+      
+      let executablePath = undefined;
+      for (const chromePath of chromePaths) {
+        if (fs.existsSync(chromePath)) {
+          executablePath = chromePath;
+          break;
+        }
+      }
+      
+      options = {
+        headless: args.headless ?? true,
+        args: ['--no-sandbox', '--disable-setuid-sandbox'],
+      };
+      
+      if (executablePath) {
+        options.executablePath = executablePath;
+      }
+    }
 
     if (args.viewport) {
       options.defaultViewport = {
@@ -309,7 +344,10 @@ class PuppeteerHTTPMCPServer {
     }
 
     const screenshot = await this.page!.screenshot(options);
-    const base64 = Buffer.from(screenshot as Buffer).toString('base64');
+    if (!screenshot) {
+      throw new Error('Failed to capture screenshot');
+    }
+    const base64 = Buffer.from(screenshot).toString('base64');
 
     return {
       content: [
@@ -336,7 +374,7 @@ class PuppeteerHTTPMCPServer {
       if (!element) {
         throw new Error(`Element not found: ${selector}`);
       }
-      text = await this.page!.evaluate(el => el.textContent || '', element);
+      text = await this.page!.evaluate((el: Element) => el.textContent || '', element);
     } else {
       text = await this.page!.evaluate(() => document.body.textContent || '');
     }
@@ -387,7 +425,7 @@ class PuppeteerHTTPMCPServer {
     const { script } = EvaluateSchema.parse(args);
     await this.ensureBrowserAndPage();
 
-    const result = await this.page!.evaluate((scriptCode) => {
+    const result = await this.page!.evaluate((scriptCode: string) => {
       return eval(scriptCode);
     }, script);
 
@@ -425,7 +463,7 @@ class PuppeteerHTTPMCPServer {
   }
 
   start(port: number = 3000) {
-    this.app.listen(port, () => {
+    return this.app.listen(port, () => {
       console.log(`Puppeteer MCP HTTP server running on port ${port}`);
     });
   }
@@ -439,7 +477,8 @@ class PuppeteerHTTPMCPServer {
 const server = new PuppeteerHTTPMCPServer();
 
 if (process.env.NODE_ENV !== 'production') {
-  server.start(3000);
+  const port = process.env.PORT ? parseInt(process.env.PORT) : 3000;
+  server.start(port);
 }
 
 export default server.getApp();

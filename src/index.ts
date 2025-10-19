@@ -6,7 +6,7 @@ import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
-import puppeteer, { Browser, Page } from 'puppeteer';
+import puppeteer, { Browser, Page } from 'puppeteer-core';
 import { z } from 'zod';
 
 // Schema definitions for tool parameters
@@ -274,6 +274,9 @@ class PuppeteerMCPServer {
     }
 
     const screenshot = await this.page!.screenshot(options);
+    if (!screenshot) {
+      throw new Error('Failed to capture screenshot');
+    }
     const base64 = Buffer.from(screenshot).toString('base64');
 
     return {
@@ -301,7 +304,7 @@ class PuppeteerMCPServer {
       if (!element) {
         throw new Error(`Element not found: ${selector}`);
       }
-      text = await this.page!.evaluate(el => el.textContent || '', element);
+      text = await this.page!.evaluate((el: Element) => el.textContent || '', element);
     } else {
       text = await this.page!.evaluate(() => document.body.textContent || '');
     }
@@ -352,7 +355,7 @@ class PuppeteerMCPServer {
     const { script } = EvaluateSchema.parse(args);
     await this.ensureBrowserAndPage();
 
-    const result = await this.page!.evaluate((scriptCode) => {
+    const result = await this.page!.evaluate((scriptCode: string) => {
       return eval(scriptCode);
     }, script);
 
